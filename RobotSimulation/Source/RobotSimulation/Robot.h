@@ -101,7 +101,7 @@ public:
 private:
 	//Base mesh for the robot arms to be scaled and changed later
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
-	TAssetPtr<UStaticMesh> m_LinkBaseMesh;
+	TSoftObjectPtr<UStaticMesh> m_LinkBaseMesh;
 	//Array of the mesh components
 	TArray<USceneComponent*> m_LinkParents;
 	TArray<UStaticMeshComponent*> m_LinkMeshes;

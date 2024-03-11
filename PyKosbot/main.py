@@ -8,7 +8,7 @@ from threading import Thread
 
 sel = selectors.DefaultSelector()
 
-def EstablishFakeServer(self):
+def EstablishFakeServer():
     HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
     PORT = 65432  # Port to listen on (non-privileged ports are > 1023)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -32,25 +32,25 @@ def EstablishFakeServer(self):
 if __name__ == "__main__":
     print("Welcome to PyKosbot!\nThe terminal interface for Robot Simulation Version 2.")
 
-    fake_conn = True
+    fake_conn = False
     if fake_conn:
         server = Thread(target=EstablishFakeServer)
         server.start()
     
     HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
-    PORT = 65432  # Port to listen on (non-privileged ports are > 1023)
+    PORT = 27015  # Port to listen on (non-privileged ports are > 1023)
     
     print("Connecting to Kosbot Server...")
     
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     connection = client.connect((HOST, PORT))
+    print("Connection successfull.")
     print("Connected to Kosbot Server on port ", PORT, "...")
     
     client.sendall(b"Kosbot?")
-    #data = client.recv(1024)
+    data = client.recv(1024)
 
-    #print(f"Received {data!r}")
-    print("Connection successfull.")
+    print(f"Received {data!r}")
     
     ans = input("What would you like to do?")
     if ans == "q":

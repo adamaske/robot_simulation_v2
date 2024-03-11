@@ -6,8 +6,8 @@
 
 numpy
 matplotlib
-
-#pandas
+'
+#pandas'
 #scipy
 #sympy
 

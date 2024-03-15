@@ -96,7 +96,7 @@ public:
 	//void ForwardKinematics();
 	//
 	//void InverseKinematics();
-	
+	void RecieveJSON(FJsonObject json);
 #pragma region Visuals
 private:
 	//Base mesh for the robot arms to be scaled and changed later

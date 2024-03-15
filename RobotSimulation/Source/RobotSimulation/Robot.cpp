@@ -25,11 +25,27 @@ void ARobot::BeginPlay()
 void ARobot::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
 }
 
 void ARobot::Pose()
 {
+
+	GEngine->AddOnScreenDebugMessage(-1, 5, FColor::Green, FString::Printf(TEXT("Robot : POSE")));
+}
+
+void ARobot::RecieveJSON(FJsonObject json)
+{
+	double version = json.GetNumberField("Kosbot");
+	FString command = json.GetStringField("Command");
+
+	GEngine->AddOnScreenDebugMessage(-1, 5, FColor::Green, FString::Printf(TEXT("KOSBOT : %f"), version));
+	if (command == "pose") {
+		Pose();
+	}
+	else if (command == "update") {
+
+		GEngine->AddOnScreenDebugMessage(-1, 5, FColor::Green, FString::Printf(TEXT("Robot : UPDATE")));
+	}
 }
 
 void ARobot::SetupVisual()
@@ -48,9 +64,6 @@ void ARobot::SetupVisual()
 
 void ARobot::UpdateVisual()
 {
-	//Position and rotate all the link parents correctly
-
-
 	int idx = 0;
 	for (auto& link : m_Links) {
 
@@ -92,7 +105,5 @@ void ARobot::CreateVisualChain(FLink link, int idx)
 	m_LinkMeshes.Add(mesh);
 	mesh->AttachToComponent(parent, FAttachmentTransformRules::SnapToTargetIncludingScale);
 	mesh->SetStaticMesh(m_LinkBaseMesh.Get());
-
-
 }
 

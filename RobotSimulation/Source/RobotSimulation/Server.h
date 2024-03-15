@@ -15,9 +15,6 @@
 #pragma comment (lib, "Ws2_32.lib")
 // #pragma comment (lib, "Mswsock.lib")
 
-#define DEFAULT_BUFLEN 1024
-#define DEFAULT_PORT "27015"
-
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Server.generated.h"
@@ -30,16 +27,16 @@ class ROBOTSIMULATION_API AServer : public AActor
 	GENERATED_BODY()
 	
 private:		
-	int b_Running = false;
+	int running = false;
+	int connected = false;
 
-	int b_Connected = false;
-	WSADATA wsaData;
+	WSADATA wsa_data;
 
-	SOCKET ListenSocket = INVALID_SOCKET;
-	SOCKET ClientSocket = INVALID_SOCKET;
+	SOCKET listen_socket = INVALID_SOCKET;
+	SOCKET client_socket = INVALID_SOCKET;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
-	TObjectPtr<ARobot> m_Robot;
+	TObjectPtr<ARobot> robot;
 public:	
 	// Sets default values for this actor's properties
 	AServer();
@@ -47,15 +44,20 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
-
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
+	int InitWSA();
 
-	int Start();
+	int StartListening();
+	int Listen();//Set listen_socket in listening mode
 	int Connect();
-	int Listen();
+
 	int Shutdown();
 	int Close(); // 0 failed to close, 1 closed
+
+	int Recieve();
+	//Helpers
+	void PrintError(FString msg);
 };

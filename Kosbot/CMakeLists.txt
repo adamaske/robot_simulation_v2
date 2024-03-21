@@ -1,6 +1,7 @@
 #cmake version
 cmake_minimum_required(VERSION 3.20)
 
+set(PROJECT_NAME "Kosbot")
 
 #3rd part libraries folder
 set(VENDOR_DIR "${PROJECT_BINARY_DIR}/vendor")
@@ -8,11 +9,11 @@ set(VENDOR_DIR "${PROJECT_BINARY_DIR}/vendor")
 #set(CMAKE_TOOLCHAIN_FILE "${VENDOR_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake")
 
 #define the project
-project(CPP_TEMPLATE VERSION 0.1)
+project(${PROJECT_NAME} VERSION 0.1)
 
 #set cxx standard
-add_library(cpptemplate_compiler_flags INTERFACE)
-target_compile_features(cpptemplate_compiler_flags INTERFACE cxx_std_20)
+add_library(compiler_flags INTERFACE)
+target_compile_features(compiler_flags INTERFACE cxx_std_20)
 
 
 set(gcc_like_cxx "$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")

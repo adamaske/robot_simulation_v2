@@ -21,6 +21,7 @@ private:
 	UFUNCTION(BlueprintCallable)
 	void Parse_JSON_From_TCP(TArray<uint8> bytes);
 
+	
 public:
 
 };

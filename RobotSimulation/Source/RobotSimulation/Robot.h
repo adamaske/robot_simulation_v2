@@ -17,10 +17,15 @@ public:
 	UPROPERTY(EditAnywhere, Meta = (AllowPrivateAccess = True))
 	FName m_Name;
 
+	UPROPERTY(EditAnywhere, Meta = (AllowPrivateAccess = True))
+	TEnumAsByte<ERobotType> m_Type;
 };
 
 UENUM()
 enum ERotationAxis{ X, Y, Z};
+
+UENUM()
+enum ELinkType{ REVOLUTE, PRISMATIC  };
 USTRUCT(BlueprintType)
 struct FLink {
 	GENERATED_BODY()
@@ -29,10 +34,13 @@ public:
 	FName m_Name = "Link 0";
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
+	TEnumAsByte<ELinkType> m_Type = REVOLUTE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
 	TEnumAsByte<ERotationAxis> m_RotationAxis = X;
 
 	UPROPERTY(EditAnywhere, Meta = (AllowPrivateAccess = True))
-	float m_Theta = 0	;
+	float m_Theta = 0;
 
 	UPROPERTY(EditAnywhere, Meta = (AllowPrivateAccess = True))
 	float m_Width = 10;
@@ -43,12 +51,9 @@ public:
 };
 
 USTRUCT(BlueprintType)
-struct FDHParameter {
+struct FDHParam {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere)
-	int m_Order = 0;
-
 	//Rotaiton along X-Axis
 	UPROPERTY(EditAnywhere, Meta = (AllowPrivateAccess = True))
 	float m_Alpha = 0;
@@ -71,7 +76,7 @@ class ROBOTSIMULATION_API ARobot : public AActor
 	
 private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
-	TArray<FDHParameter> m_DHParameters;
+	TArray<FDHParam> m_DHParameters;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
 	TArray<FLink> m_Links;
@@ -90,13 +95,28 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
+	void RecieveJSON(FJsonObject json);
+
+	UFUNCTION(BlueprintCallable)
+	FVector GetNumericalFKResult();
+
+	UFUNCTION(BlueprintCallable)
+	FVector GetDHFKResult();
 
 	void Pose();
-	//Based on a set of angles, find the position of the end effector
-	//void ForwardKinematics();
-	//
+	
+	FLink EndEffectorLink();
+#pragma region MATH
+	FMatrix ForwardKinematics();
+	FMatrix DH_ForwardKinematics();
 	//void InverseKinematics();
-	void RecieveJSON(FJsonObject json);
+
+	FMatrix PositionMatrix(FVector position);
+	FMatrix RotationMatrix(ERotationAxis axis, float theta);
+	FMatrix DH_TranslationMatrix(FDHParam dh);
+
+#pragma endregion
+
 #pragma region Visuals
 private:
 	//Base mesh for the robot arms to be scaled and changed later
@@ -109,7 +129,8 @@ private:
 public:
 	void SetupVisual();
 	void UpdateVisual();
-
+	void DestroyVisual();
 	void CreateVisualChain(FLink link, int idx);
 #pragma endregion
+
 };

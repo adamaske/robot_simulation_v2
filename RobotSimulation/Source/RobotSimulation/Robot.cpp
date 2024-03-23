@@ -59,9 +59,24 @@ void ARobot::Pose()
 	GEngine->AddOnScreenDebugMessage(-1, 5, FColor::Green, FString::Printf(TEXT("Robot : POSE")));
 }
 
-FLink ARobot::EndEffectorLink()
+FLink* ARobot::EndEffectorLink()//Not a reference
 {
-	return m_Links[m_Links.Num()-1];
+	return &m_Links[m_Links.Num()-1];
+}
+
+void ARobot::SetLinkAngles(TArray<float> angles)
+{	int idx = 0;
+	for (auto& link : m_Links) {
+		link.m_Theta = angles[idx];
+		idx++;
+	}
+	UpdateVisual();
+}
+
+void ARobot::SetLinkAngle(int link_index, float angle)
+{
+	m_Links[link_index].m_Theta = angle;
+	UpdateVisual();
 }
 
 FMatrix ARobot::ForwardKinematics()
@@ -70,10 +85,10 @@ FMatrix ARobot::ForwardKinematics()
 	int idx = 0;
 	for (auto link : m_Links) {
 		FMatrix rot = RotationMatrix(link.m_RotationAxis, link.m_Theta);
-		FMatrix pos = PositionMatrix(FVector(link.m_Depth, link.m_Width, link.m_Height));
-
+		FMatrix pos = PositionMatrix(FVector(link.X_Translation, link.Y_Translation, link.Z_Translation));
 		FMatrix l = rot * pos;
-		t *= l;
+		
+		t = t * rot * pos;
 	}
 	return t;
 }
@@ -151,19 +166,29 @@ FMatrix ARobot::DH_TranslationMatrix(FDHParam dh)
 	float alpha = FMath::DegreesToRadians(dh.m_Alpha);
 	float r = dh.m_R;
 	float d = dh.m_D;
-
 	float ct = cos(t);
 	float st = sin(t);
+	float ca = cos(alpha);
+	float sa = sin(alpha);
 
 	FMatrix mat = FMatrix(
-		FPlane(ct, -st * cos(alpha), st * sin(alpha), r * ct),
-		FPlane(st, ct * cos(alpha), -ct * sin(alpha), r * st),
-		FPlane(0, sin(alpha), cos(alpha), d),
+		FPlane(ct, -st * ca, st * sa, r * ct),
+		FPlane(st, ct * ca, -ct * sa, r * st),
+		FPlane( 0, sa, ca, d),
 		FPlane(0, 0, 0, 1)
-
 	);
 
 	return mat;
+}
+
+FVector ARobot::RobotToWorldSpace(FVector input)
+{
+	return GetActorLocation() + input;
+}
+
+FVector ARobot::WorldToRobotSpace(FVector input)
+{
+	return input - GetActorLocation();
 }
 
 void ARobot::SetupVisual()
@@ -175,7 +200,6 @@ void ARobot::SetupVisual()
 
 	int num = m_Links.Num();
 	m_LinkParents.SetNum(num);
-	m_LinkMeshes.SetNum(num);
 
 	DestroyVisual();
 
@@ -195,11 +219,7 @@ void ARobot::UpdateVisual()
 	for (auto& link : m_Links) {
 
 		USceneComponent* parent = m_LinkParents[idx];
-		UStaticMeshComponent* mesh = m_LinkMeshes[idx];
 
-		mesh->SetRelativeScale3D(FVector(link.m_Depth, link.m_Width, link.m_Height) / 100.f);
-
-		mesh->SetRelativeLocation(FVector(0, 0, link.m_Height / 2.f));
 		//Rotate according to theta
 		auto rot = parent->GetRelativeRotation();
 		rot.Roll = link.m_RotationAxis == X ? link.m_Theta : 0;
@@ -209,7 +229,12 @@ void ARobot::UpdateVisual()
 
 		if (idx != 0) {
 			//
-			parent->SetRelativeLocation(FVector(0, 0, m_Links[idx - 1].m_Height));
+			parent->SetRelativeLocation(FVector(m_Links[idx - 1].X_Translation, 
+												m_Links[idx - 1].Y_Translation, 
+												m_Links[idx - 1].Z_Translation));
+		}
+		else {
+			parent->SetRelativeLocation(FVector::ZeroVector);
 		}
 
 		idx++;
@@ -218,18 +243,24 @@ void ARobot::UpdateVisual()
 
 void ARobot::DestroyVisual()
 {
-	int idx = 0;
-	for (auto link : m_Links) {
-		if (m_LinkMeshes[idx]) {
-			m_LinkMeshes[idx]->DestroyComponent();
-			m_LinkMeshes[idx] = nullptr;
+	return;
+	for (auto visual : m_LinkVisuals) {
+		if (visual.x) {
+			visual.x->DestroyComponent();
 		}
-		if (m_LinkParents[idx]) {
-			m_LinkParents[idx]->DestroyComponent();
-			m_LinkParents[idx] = nullptr;
+		if (visual.y) {
+			visual.y->DestroyComponent();
 		}
-		idx++;
+		if (visual.z) {
+			visual.z->DestroyComponent();
+		}
 	}
+	m_LinkVisuals.Empty();
+
+	for (auto parent : m_LinkParents) {
+		parent->DestroyComponent();
+	}
+	m_LinkParents.Empty();
 }
 
 void ARobot::CreateVisualChain(FLink link, int idx)
@@ -242,11 +273,99 @@ void ARobot::CreateVisualChain(FLink link, int idx)
 	parent->AttachToComponent(idx == 0 ? RootComponent : m_LinkParents[idx - 1],
 		FAttachmentTransformRules::SnapToTargetIncludingScale);
 
-	UActorComponent* mesh_comp = AddComponentByClass(UStaticMeshComponent::StaticClass(), true, FTransform::Identity, false);
-	AddInstanceComponent(mesh_comp);
-	UStaticMeshComponent* mesh = Cast<UStaticMeshComponent>(mesh_comp);
+	FLinkVisual visual;
 
-	m_LinkMeshes[idx] = mesh;
-	mesh->AttachToComponent(parent, FAttachmentTransformRules::SnapToTargetIncludingScale);
-	mesh->SetStaticMesh(m_LinkBaseMesh.Get());
+	//Translation is 0 then dont need a mesh
+	bool x = link.X_Translation != 0;
+	bool y = link.Y_Translation != 0;
+	bool z = link.Z_Translation != 0;
+	
+	if (x) {
+		auto x_mesh = AddComponentByClass(UStaticMeshComponent::StaticClass(), true, FTransform::Identity, false);
+		AddInstanceComponent(x_mesh);
+
+		auto mesh = Cast<UStaticMeshComponent>(x_mesh);
+		visual.x = mesh;
+
+		mesh->AttachToComponent(parent, FAttachmentTransformRules::SnapToTargetIncludingScale);
+		mesh->SetStaticMesh(m_LinkBaseMesh.Get());
+
+
+		mesh->SetRelativeScale3D(FVector(m_LinkVisualThickness, m_LinkVisualThickness, link.X_Translation) / 100.f);
+
+		//Orient correctly
+		mesh->SetRelativeLocation(FVector(0, 0, 0));
+
+		//X points in -90 y
+		auto rot  = mesh->GetRelativeRotation();
+		rot.Pitch = -90;
+		mesh->SetRelativeRotation(rot);
+
+	}
+	if (y) {
+		auto y_mesh = AddComponentByClass(UStaticMeshComponent::StaticClass(), true, FTransform::Identity, false);
+		AddInstanceComponent(y_mesh);
+
+		auto mesh = Cast<UStaticMeshComponent>(y_mesh);
+		visual.y = mesh;
+
+		mesh->AttachToComponent(parent, FAttachmentTransformRules::SnapToTargetIncludingScale);
+		mesh->SetStaticMesh(m_LinkBaseMesh.Get());
+
+
+		mesh->SetRelativeScale3D(FVector(m_LinkVisualThickness, m_LinkVisualThickness, link.Y_Translation) / 100.f);
+
+		mesh->SetRelativeLocation(FVector(x ? link.X_Translation : 0, 0, 0));
+
+		//Y points in 90 x
+		auto rot = mesh->GetRelativeRotation();
+		rot.Roll = 90;
+		mesh->SetRelativeRotation(rot);
+	}
+
+	if (z) {
+		auto z_mesh = AddComponentByClass(UStaticMeshComponent::StaticClass(), true, FTransform::Identity, false);
+		AddInstanceComponent(z_mesh);
+
+		auto mesh = Cast<UStaticMeshComponent>(z_mesh);
+		visual.z = mesh;
+
+		mesh->AttachToComponent(parent, FAttachmentTransformRules::SnapToTargetIncludingScale);
+		mesh->SetStaticMesh(m_LinkBaseMesh.Get());
+
+
+		mesh->SetRelativeScale3D(FVector(m_LinkVisualThickness, m_LinkVisualThickness, link.Z_Translation) / 100.f);
+
+		mesh->SetRelativeLocation(FVector(x ? link.X_Translation : 0, y ? link.Y_Translation : 0, 0));
+
+		//Z Dosent need rotation
+	}
+
+	m_LinkVisuals.Add(visual);
+}
+
+FVector ARobot::GetActualEndEffectorLocation()
+{
+	int amount = m_LinkVisuals.Num();
+	FLinkVisual last = m_LinkVisuals[amount - 1];
+
+	if (last.z) {
+		auto pos = last.z->GetComponentLocation();
+		pos.Z += m_Links[m_Links.Num() - 1].Z_Translation;
+		return WorldToRobotSpace(pos);
+	}
+
+	if (last.y) {
+		auto pos = last.y->GetComponentLocation();
+
+		pos.Y += m_Links[m_Links.Num() - 1].Y_Translation;
+		return WorldToRobotSpace(pos);
+	}
+
+	if (last.x) {
+		auto pos = last.x->GetComponentLocation();
+		pos.X += m_Links[m_Links.Num() - 1].X_Translation;
+		return WorldToRobotSpace(pos);
+	}
+	return FVector();
 }

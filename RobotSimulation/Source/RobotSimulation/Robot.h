@@ -30,8 +30,8 @@ USTRUCT(BlueprintType)
 struct FLink {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Meta = (AllowPrivateAccess = True))
-	FName m_Name = "Link 0";
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
+	FString m_Name = "Link 0";
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
 	TEnumAsByte<ELinkType> m_Type = REVOLUTE;
@@ -39,15 +39,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
 	TEnumAsByte<ERotationAxis> m_RotationAxis = X;
 
-	UPROPERTY(EditAnywhere, Meta = (AllowPrivateAccess = True))
-	float m_Theta = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
+	float X_Translation = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
+	float Y_Translation = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
+	float Z_Translation = 10;
 
-	UPROPERTY(EditAnywhere, Meta = (AllowPrivateAccess = True))
-	float m_Width = 10;
-	UPROPERTY(EditAnywhere, Meta = (AllowPrivateAccess = True))
-	float m_Height = 10;
-	UPROPERTY(EditAnywhere, Meta = (AllowPrivateAccess = True))
-	float m_Depth = 10;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
+	float m_Theta = 0;
 };
 
 USTRUCT(BlueprintType)
@@ -69,6 +69,15 @@ public:
 	float m_D = 0;
 };
 
+USTRUCT(BlueprintType)
+struct FLinkVisual {
+	GENERATED_BODY()
+public:
+	UStaticMeshComponent* x = nullptr;
+	UStaticMeshComponent* y = nullptr;
+	UStaticMeshComponent* z = nullptr;
+
+};
 UCLASS()
 class ROBOTSIMULATION_API ARobot : public AActor
 {
@@ -105,7 +114,13 @@ public:
 
 	void Pose();
 	
-	FLink EndEffectorLink();
+	FLink* EndEffectorLink();
+
+	UFUNCTION(BlueprintCallable)
+	void SetLinkAngles(TArray<float> angles);
+	UFUNCTION(BlueprintCallable)
+	void SetLinkAngle(int link_index, float angle);
+
 #pragma region MATH
 	FMatrix ForwardKinematics();
 	FMatrix DH_ForwardKinematics();
@@ -115,6 +130,8 @@ public:
 	FMatrix RotationMatrix(ERotationAxis axis, float theta);
 	FMatrix DH_TranslationMatrix(FDHParam dh);
 
+	FVector RobotToWorldSpace(FVector input);
+	FVector WorldToRobotSpace(FVector input);
 #pragma endregion
 
 #pragma region Visuals
@@ -124,13 +141,15 @@ private:
 	TSoftObjectPtr<UStaticMesh> m_LinkBaseMesh;
 	//Array of the mesh components
 	TArray<USceneComponent*> m_LinkParents;
-	TArray<UStaticMeshComponent*> m_LinkMeshes;
-
+	TArray<FLinkVisual> m_LinkVisuals;
+	float m_LinkVisualThickness = 10;
 public:
 	void SetupVisual();
 	void UpdateVisual();
 	void DestroyVisual();
 	void CreateVisualChain(FLink link, int idx);
+	UFUNCTION(BlueprintCallable)
+	FVector GetActualEndEffectorLocation();
 #pragma endregion
 
 };

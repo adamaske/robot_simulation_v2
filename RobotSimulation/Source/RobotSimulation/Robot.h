@@ -70,13 +70,17 @@ public:
 };
 
 USTRUCT(BlueprintType)
-struct FLinkVisual {
+struct FTestResults {
 	GENERATED_BODY()
 public:
-	UStaticMeshComponent* x = nullptr;
-	UStaticMeshComponent* y = nullptr;
-	UStaticMeshComponent* z = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
+	int test_amount = 0;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
+	float average_numerical_error = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess = True))
+	float average_dh_error = 0;
 };
 UCLASS()
 class ROBOTSIMULATION_API ARobot : public AActor
@@ -141,15 +145,23 @@ private:
 	TSoftObjectPtr<UStaticMesh> m_LinkBaseMesh;
 	//Array of the mesh components
 	TArray<USceneComponent*> m_LinkParents;
-	TArray<FLinkVisual> m_LinkVisuals;
+	USceneComponent* m_EndEffector;
 	float m_LinkVisualThickness = 10;
 public:
 	void SetupVisual();
 	void UpdateVisual();
 	void DestroyVisual();
 	void CreateVisualChain(FLink link, int idx);
-	UFUNCTION(BlueprintCallable)
-	FVector GetActualEndEffectorLocation();
+	UStaticMeshComponent* CreateLinkMeshAndAttachToParent(USceneComponent* parent);
+
 #pragma endregion
 
+//=====End Effector=====
+	void UpdateEndEffector();
+	UFUNCTION(BlueprintCallable)
+	FVector GetActualEndEffectorLocation();
+
+//=====Automated Testing====
+	UFUNCTION(BlueprintCallable)
+	FTestResults RunTests();
 };

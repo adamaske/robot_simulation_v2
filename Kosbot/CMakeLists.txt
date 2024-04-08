@@ -12,14 +12,14 @@ set(VENDOR_DIR "${PROJECT_BINARY_DIR}/vendor")
 project(${PROJECT_NAME} VERSION 0.1)
 
 #set cxx standard
-add_library(compiler_flags INTERFACE)
-target_compile_features(compiler_flags INTERFACE cxx_std_20)
+add_library(cpp_compiler_flags INTERFACE)
+target_compile_features(cpp_compiler_flags INTERFACE cxx_std_20)
 
 
 set(gcc_like_cxx "$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")
 set(msvc_cxx "$<COMPILE_LANG_AND_ID:CXX,MSVC>")
 
-target_compile_options(cpptemplate_compiler_flags INTERFACE
+target_compile_options(cpp_compiler_flags INTERFACE
     "$<${gcc_like_cxx}:$<BUILD_INTERFACE:-Wall;-Wextra;-Wshadow;-Wformat=2;-Wunused>>"
     "$<${msvc_cxx}:$<BUILD_INTERFACE: -W3>>"
     )
@@ -34,10 +34,10 @@ add_subdirectory(Networking)
 
 configure_file(Config.h.in Config.h)
 
-add_executable(CPP_TEMPLATE main.cpp)
+add_executable(${PROJECT_NAME} main.cpp)
 
-target_include_directories(CPP_TEMPLATE PUBLIC
+target_include_directories(${PROJECT_NAME} PUBLIC
     "${PROJECT_BINARY_DIR}"
     )     
 
-target_link_libraries(CPP_TEMPLATE PUBLIC Core Networking cpptemplate_compiler_flags)
+target_link_libraries(${PROJECT_NAME} PUBLIC Core Networking cpp_compiler_flags)

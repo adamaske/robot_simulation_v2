@@ -20,7 +20,7 @@ endif()
 
 
 #Link cpptemaplte compiler flags to this one
-target_link_libraries(Networking PUBLIC cpptemplate_compiler_flags)
+target_link_libraries(Networking PUBLIC cpp_compiler_flags)
 
 
 

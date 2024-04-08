@@ -10,7 +10,6 @@ ARobot::ARobot()
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
-
 }
 
 // Called when the game starts or when spawned
@@ -41,42 +40,45 @@ void ARobot::RecieveJSON(FJsonObject json)
 		GEngine->AddOnScreenDebugMessage(-1, 5, FColor::Green, FString::Printf(TEXT("Robot : UPDATE")));
 	}
 }
+
 FVector ARobot::GetNumericalFKResult()
 {
 	return ForwardKinematics().GetColumn(3);
 }
 FVector ARobot::GetDHFKResult()
 {
-	return  DH_ForwardKinematics().GetColumn(3);
+	return DH_ForwardKinematics().GetColumn(3);
 }
 
 void ARobot::Pose()
 {
-	FMatrix norm_fk = ForwardKinematics();
-	FMatrix dh_fk = DH_ForwardKinematics();
-
-
-	GEngine->AddOnScreenDebugMessage(-1, 5, FColor::Green, FString::Printf(TEXT("Robot : POSE")));
-}
-
-FLink* ARobot::EndEffectorLink()//Not a reference
-{
-	return &m_Links[m_Links.Num()-1];
+	UpdateEndEffector();
+	UpdateVisual();
+	m_OnPosed.Broadcast();
 }
 
 void ARobot::SetLinkAngles(TArray<float> angles)
 {	int idx = 0;
 	for (auto& link : m_Links) {
 		link.m_Theta = angles[idx];
+		m_DHParams[idx].Theta = angles[idx];
 		idx++;
 	}
-	UpdateVisual();
+	Pose();
 }
 
 void ARobot::SetLinkAngle(int link_index, float angle)
 {
 	m_Links[link_index].m_Theta = angle;
-	UpdateVisual();
+	m_DHParams[link_index].Theta = angle;
+	Pose();
+}
+
+void ARobot::AddLinkAngle(int link_index, float delta)
+{
+	m_Links[link_index].m_Theta += delta;
+	m_DHParams[link_index].Theta += delta;
+	Pose();
 }
 
 FMatrix ARobot::ForwardKinematics()
@@ -84,11 +86,10 @@ FMatrix ARobot::ForwardKinematics()
 	FMatrix t = FMatrix::Identity;
 	int idx = 0;
 	for (auto link : m_Links) {
-		FMatrix rot = RotationMatrix(link.m_RotationAxis, link.m_Theta);
-		FMatrix pos = PositionMatrix(FVector(link.X_Translation, link.Y_Translation, link.Z_Translation));
-		FMatrix l = rot * pos;
-		
-		t = t * rot * pos;
+		float theta = link.m_RotationAxis == Y ? -link.m_Theta : link.m_Theta; //Adjust for left hand system
+		FMatrix rot = RotationMatrix(link.m_RotationAxis, theta);
+		FMatrix pos = PositionMatrix(link.m_Translations);
+		t = t * (rot * pos);
 	}
 	return t;
 }
@@ -97,7 +98,7 @@ FMatrix ARobot::DH_ForwardKinematics()
 {
 	FMatrix dh_t = FMatrix::Identity;
 	int idx = 0;
-	for (auto dh : m_DHParameters) {
+	for (auto dh : m_DHParams) {
 		FMatrix dh_mat = DH_TranslationMatrix(dh);
 		dh_t *= dh_mat;
 	}
@@ -162,10 +163,10 @@ FMatrix ARobot::RotationMatrix(ERotationAxis axis, float theta)
 
 FMatrix ARobot::DH_TranslationMatrix(FDHParam dh)
 {
-	float t = FMath::DegreesToRadians(dh.m_Theta);
-	float alpha = FMath::DegreesToRadians(dh.m_Alpha);
-	float r = dh.m_R;
-	float d = dh.m_D;
+	float t = FMath::DegreesToRadians(dh.Theta);
+	float alpha = FMath::DegreesToRadians(dh.Alpha);
+	float r = dh.R;
+	float d = dh.D;
 	float ct = cos(t);
 	float st = sin(t);
 	float ca = cos(alpha);
@@ -201,7 +202,11 @@ void ARobot::SetupVisual()
 	int num = m_Links.Num();
 	m_LinkParents.SetNum(num);
 
-	DestroyVisual();
+	int diff = num - m_DHParams.Num();
+	for (int i = 0; i < diff; i++) {
+		m_DHParams.Add(FDHParam());
+	}
+	
 
 	int idx = 0;
 	for (auto& link : m_Links) {
@@ -217,39 +222,54 @@ void ARobot::SetupVisual()
 
 void ARobot::UpdateVisual()
 {
-	int idx = 0;
-	for (auto& link : m_Links) {
+	FMatrix T = FMatrix::Identity;
+	for (int i = 0; i < m_Links.Num(); i++) {
+		
+		auto const link = m_Links[i];
+		auto const parent = m_LinkParents[i];
+		auto const axis = link.m_RotationAxis;
+		auto const theta = link.m_Theta;
+		auto const prev_loc = T.GetColumn(3);
 
-		USceneComponent* parent = m_LinkParents[idx];
-
-		//Rotate according to theta
-		auto rot = parent->GetRelativeRotation();
-		rot.Roll = link.m_RotationAxis == X ? -link.m_Theta : 0;
-		rot.Pitch = link.m_RotationAxis == Y ? -link.m_Theta : 0;
-		rot.Yaw = link.m_RotationAxis == Z ? link.m_Theta : 0;
-		parent->SetRelativeRotation(rot);
-
-		if (idx != 0) {
-			//
-			parent->SetRelativeLocation(FVector(m_Links[idx - 1].X_Translation, 
-												m_Links[idx - 1].Y_Translation, 
-												m_Links[idx - 1].Z_Translation));
+		FRotator offset_rot = FRotator::ZeroRotator;
+		if (bool use_offset = false) {
+			auto offsets = link.m_RotationOffsets;
+			FMatrix of = FMatrix::Identity;
+			for (int j = 0; j < 3; j++) {
+				if (offsets[j] != 0) {
+					of *= RotationMatrix(ERotationAxis(i), offsets[j]);
+				}
+			}
+			offset_rot = FRotationMatrix::MakeFromXZ(of.GetColumn(0), of.GetColumn(2)).Rotator();
 		}
-		else {
-			parent->SetRelativeLocation(FVector::ZeroVector);
-		}
 
-		idx++;
-	}
-}
+		//Rotate theta and translate the length of it
+		auto rot = RotationMatrix(axis, axis == Y ? -theta : theta);
+		auto pos = PositionMatrix(link.m_Translations); //Position of this link is the previous translation
+		auto t = rot * pos;
+		T = T * t;
 
-void ARobot::DestroyVisual()
-{
-	return;
-	for (auto parent : m_LinkParents) {
-		parent->DestroyComponent();
+		FVector forward = T.GetColumn(0);
+		FVector right = T.GetColumn(1);
+		FVector up = T.GetColumn(2);
+		FVector new_loc = T.GetColumn(3);
+		FRotator new_rot = FRotationMatrix::MakeFromXY(forward, right).Rotator();
+
+		parent->SetRelativeRotation(new_rot);
+		parent->SetRelativeLocation(prev_loc);
+
+		//GEngine->AddOnScreenDebugMessage(-1, 15, FColor::Cyan, FString::Printf(TEXT("=======================")));
+		//if(use_offset){ GEngine->AddOnScreenDebugMessage(-1, 15, FColor::Cyan, FString::Printf(TEXT("Offset : %s"), *offset_rot.ToString())); }
+		//
+		//GEngine->AddOnScreenDebugMessage(-1, 15, FColor::Cyan, FString::Printf(TEXT("Up : %s"), *up.ToString()));
+		//GEngine->AddOnScreenDebugMessage(-1, 15, FColor::Cyan, FString::Printf(TEXT("Right : %s"), *right.ToString()));
+		//GEngine->AddOnScreenDebugMessage(-1, 15, FColor::Cyan, FString::Printf(TEXT("Forward : %s"), *forward.ToString()));
+		//
+		//GEngine->AddOnScreenDebugMessage(-1, 15, FColor::Cyan, FString::Printf(TEXT("Rotation : %s"), *new_rot.ToString()));
+		//GEngine->AddOnScreenDebugMessage(-1, 15, FColor::Cyan, FString::Printf(TEXT("Location : %s"), *new_loc.ToString()));
+		//
+		//GEngine->AddOnScreenDebugMessage(-1, 15, FColor::Cyan, FString::Printf(TEXT("===== LINK %d ======"), i));
 	}
-	m_LinkParents.Empty();
 }
 
 void ARobot::CreateVisualChain(FLink link, int idx)
@@ -259,17 +279,17 @@ void ARobot::CreateVisualChain(FLink link, int idx)
 
 	USceneComponent* parent = Cast<USceneComponent>(parent_comp);
 	m_LinkParents[idx] = parent;
-	parent->AttachToComponent(idx == 0 ? RootComponent : m_LinkParents[idx - 1],
+	parent->AttachToComponent(idx == 0 ? RootComponent : RootComponent,// m_LinkParents[idx - 1],
 		FAttachmentTransformRules::SnapToTargetIncludingScale);
 
 	//Translation is 0 then dont need a mesh
-	bool x = link.X_Translation != 0;
-	bool y = link.Y_Translation != 0;
-	bool z = link.Z_Translation != 0;
+	bool x = link.m_Translations.X != 0;
+	bool y = link.m_Translations.Y != 0;
+	bool z = link.m_Translations.Z != 0;
 	
 	if (x) {
 		auto mesh = CreateLinkMeshAndAttachToParent(parent);
-		mesh->SetRelativeScale3D(FVector(m_LinkVisualThickness, m_LinkVisualThickness, link.X_Translation) / 100.f);
+		mesh->SetRelativeScale3D(FVector(m_LinkVisualThickness, m_LinkVisualThickness, link.m_Translations.X) / 100.f);
 		mesh->SetRelativeLocation(FVector(0, 0, 0));
 
 		//X points in -90 y
@@ -280,8 +300,8 @@ void ARobot::CreateVisualChain(FLink link, int idx)
 	}
 	if (y) {
 		auto mesh = CreateLinkMeshAndAttachToParent(parent);
-		mesh->SetRelativeScale3D(FVector(m_LinkVisualThickness, m_LinkVisualThickness, link.Y_Translation) / 100.f);
-		mesh->SetRelativeLocation(FVector(x ? link.X_Translation : 0, 0, 0));
+		mesh->SetRelativeScale3D(FVector(m_LinkVisualThickness, m_LinkVisualThickness, link.m_Translations.Y) / 100.f);
+		mesh->SetRelativeLocation(FVector(x ? link.m_Translations.X : 0, 0, 0));
 
 		//Y points in 90 x
 		auto rot = mesh->GetRelativeRotation();
@@ -291,8 +311,8 @@ void ARobot::CreateVisualChain(FLink link, int idx)
 
 	if (z) {
 		auto mesh = CreateLinkMeshAndAttachToParent(parent);
-		mesh->SetRelativeScale3D(FVector(m_LinkVisualThickness, m_LinkVisualThickness, link.Z_Translation) / 100.f);
-		mesh->SetRelativeLocation(FVector(x ? link.X_Translation : 0, y ? link.Y_Translation : 0, 0));
+		mesh->SetRelativeScale3D(FVector(m_LinkVisualThickness, m_LinkVisualThickness, link.m_Translations.Z) / 100.f);
+		mesh->SetRelativeLocation(FVector(x ? link.m_Translations.X : 0, y ? link.m_Translations.Y : 0, 0));
 	}
 }
 
@@ -307,24 +327,31 @@ UStaticMeshComponent* ARobot::CreateLinkMeshAndAttachToParent(USceneComponent* p
 	return mesh;
 }
 
+FLink* ARobot::EndEffectorLink()//Not a reference
+{
+	return &m_Links[m_Links.Num() - 1];
+}
+
 void ARobot::UpdateEndEffector()
 {
 	if (!m_EndEffector) {
-		UActorComponent* ee = AddComponentByClass(USceneComponent::StaticClass(), true, FTransform::Identity, false);
-		AddInstanceComponent(ee);
-		m_EndEffector = Cast<USceneComponent>(ee);
+		auto comp = AddComponentByClass(USceneComponent::StaticClass(), true, FTransform::Identity, false);
+		AddInstanceComponent(comp);
+		m_EndEffector = Cast<USceneComponent>(comp);
+		m_EndEffector->AttachToComponent(RootComponent, FAttachmentTransformRules::SnapToTargetIncludingScale);
 	}
-	auto parent = m_LinkParents[m_LinkParents.Num() - 1];
-	auto link = m_Links[m_Links.Num() - 1];
 
-	m_EndEffector->AttachToComponent(parent, FAttachmentTransformRules::SnapToTargetIncludingScale);
-	m_EndEffector->SetRelativeLocation(FVector(	link.X_Translation,
-												link.Y_Translation,
-												link.Z_Translation));
+	auto fk = ForwardKinematics();
+	auto rot = FRotationMatrix::MakeFromXY(fk.GetColumn(0), fk.GetColumn(2)).Rotator();
+	auto loc = fk.GetColumn(3);
+
+	m_EndEffector->SetRelativeRotation(rot);
+	m_EndEffector->SetRelativeLocation(loc);
 }
 
 FVector ARobot::GetActualEndEffectorLocation()
 {
+	UpdateEndEffector();
 	return WorldToRobotSpace(m_EndEffector->GetComponentLocation());
 }
 

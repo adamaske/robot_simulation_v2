@@ -1,9 +1,12 @@
-add_library(Core entry.cpp)
 
-# for anybody to use Core, they need to include 
-target_include_directories(Core INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+file(GLOB CORE_SOURCES ${CURRENT_CMAKE_SOURCE_DIR}src/*cpp)
+file(GLOB CORE_INCLUDES ${CURRENT_CMAKE_SOURCE_DIR}include/*.h)
 
-target_link_libraries(Core PUBLIC cpp_compiler_flags)
+add_library(Core SHARED ${CORE_SOURCES} ${CORE_INCLUDES})
+target_include_directories(Core INTERFACE ${CORE_INCLUDES})
 
+target_link_libraries(Core PUBLIC kosbot_compiler_flags)
+
+target_compile_definitions(Core PRIVATE "CORE_ACTIVE")
 
 

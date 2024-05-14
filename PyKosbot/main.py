@@ -49,14 +49,17 @@ def send_close_request(socket: socket.socket):
     
     
 if __name__ == "__main__":
-    server = Thread(target=Kosbot_Server.run_serv)
-    server.start()
+    #server = Thread(target=Kosbot_Server.run_serv)
+    #server.start()
     
     HOST = Kosbot_Info.serv_host
     PORT = Kosbot_Info.serv_port
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((HOST, PORT))
+    
+    sock.send(b"Hello from python")
+    
  
     con_id = connect_to_kosbot(sock)
     print(f"Connection_ID : {con_id}")
@@ -89,7 +92,7 @@ if __name__ == "__main__":
             print("Not recognized...")
             continue
     
-    server.join()
+    #server.join()
     
     exit()
     

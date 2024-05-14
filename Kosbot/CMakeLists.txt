@@ -1,13 +1,14 @@
 cmake_minimum_required(VERSION 3.15)
 
-include(cmake_functions.cmake)
-
 project(Kosbot VERSION 1.0)
 
-set(${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${PROJECT_BINARY_DIR})
-set(${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} ${PROJECT_BINARY_DIR})
-set(${CMAKE_LIBRARY_OUTPUT_DIRECTORY} ${PROJECT_BINARY_DIR})
+#add_subdirectory(Kostull)
 
-add_subdirectory(deps)
-add_subdirectory(vendor)
-add_subdirectory(src)
+file(GLOB SRCS ${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp)
+file(GLOB INCS ${CMAKE_CURRENT_SOURCE_DIR}/Include/*.h)
+
+add_executable(${PROJECT_NAME} ${SRCS})
+
+target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Include")
+
+#target_link_libraries(${PROJECT_NAME} PRIVATE Kostull)
